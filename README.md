@@ -1,4 +1,4 @@
-# pdfviewer_custom_search
+# Perform Text Search in a PDF Document Using Flutter PDF Viewer
 
 A Flutter application that demonstrates how to create a custom search toolbar and perform text search operation using Flutter PDF Viewer.
 
@@ -14,3 +14,6 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter, view our
 [online documentation](https://flutter.dev/docs), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+
+## Blog reference
+[How to Perform Text Search in a PDF Document Using Flutter PDF Viewer](https://www.syncfusion.com/blogs/post/perform-text-search-in-a-pdf-document-using-flutter-pdf-viewer.aspx)
