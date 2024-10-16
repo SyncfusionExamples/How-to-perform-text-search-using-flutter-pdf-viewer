@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
@@ -17,39 +18,38 @@ class CustomSearchPdfViewer extends StatefulWidget {
 class CustomSearchPdfViewerState extends State<CustomSearchPdfViewer> {
   final PdfViewerController _pdfViewerController = PdfViewerController();
   final GlobalKey<SearchToolbarState> _textSearchKey = GlobalKey();
+  late bool _showSearchToolbar;
+  late bool _showScrollHead;
 
-  bool _showToast;
-  bool _showScrollHead;
-  bool _showSearchToolbar;
-
-  // Ensure the entry history of text search.
-  LocalHistoryEntry _localHistoryEntry;
+  /// Ensure the entry history of Text search.
+  LocalHistoryEntry? _localHistoryEntry;
 
   @override
   void initState() {
-    _showToast = false;
-    _showScrollHead = true;
     _showSearchToolbar = false;
+    _showScrollHead = true;
     super.initState();
   }
 
+  /// Ensure the entry history of text search.
   void _ensureHistoryEntry() {
     if (_localHistoryEntry == null) {
-      final ModalRoute<dynamic> route = ModalRoute.of(context);
+      final ModalRoute<dynamic>? route = ModalRoute.of(context);
       if (route != null) {
         _localHistoryEntry =
             LocalHistoryEntry(onRemove: _handleHistoryEntryRemoved);
-        route.addLocalHistoryEntry(_localHistoryEntry);
+        route.addLocalHistoryEntry(_localHistoryEntry!);
       }
     }
   }
 
+  /// Remove history entry for text search.
   void _handleHistoryEntryRemoved() {
-    _textSearchKey?.currentState?.clearSearch();
+    _textSearchKey.currentState?.clearSearch();
     setState(() {
       _showSearchToolbar = false;
-      _localHistoryEntry = null;
     });
+    _localHistoryEntry = null;
   }
 
   @override
@@ -72,13 +72,13 @@ class CustomSearchPdfViewerState extends State<CustomSearchPdfViewer> {
                         }
                       });
                     }
-                    if (toolbarItem.toString() == 'onSubmit') {
+                    if (toolbarItem.toString() == 'noResultFound') {
                       setState(() {
-                        _showToast = true;
+                        _textSearchKey.currentState?._showToast = true;
                       });
-                      await Future.delayed(Duration(seconds: 2));
+                      await Future.delayed(Duration(seconds: 1));
                       setState(() {
-                        _showToast = false;
+                        _textSearchKey.currentState?._showToast = false;
                       });
                     }
                   },
@@ -118,7 +118,7 @@ class CustomSearchPdfViewerState extends State<CustomSearchPdfViewer> {
             canShowScrollHead: _showScrollHead,
           ),
           Visibility(
-            visible: _showToast,
+            visible: _textSearchKey.currentState?._showToast ?? false,
             child: Align(
               alignment: Alignment.center,
               child: Flex(
@@ -163,17 +163,17 @@ class SearchToolbar extends StatefulWidget {
     this.controller,
     this.onTap,
     this.showTooltip = true,
-    Key key,
+    Key? key,
   }) : super(key: key);
 
   /// Indicates whether the tooltip for the search toolbar items need to be shown or not.
   final bool showTooltip;
 
   /// An object that is used to control the [SfPdfViewer].
-  final PdfViewerController controller;
+  final PdfViewerController? controller;
 
   /// Called when the search toolbar item is selected.
-  final SearchTapCallback onTap;
+  final SearchTapCallback? onTap;
 
   @override
   SearchToolbarState createState() => SearchToolbarState();
@@ -181,18 +181,20 @@ class SearchToolbar extends StatefulWidget {
 
 /// State for the SearchToolbar widget
 class SearchToolbarState extends State<SearchToolbar> {
-  bool _showSearchResultItems = false;
-  int _textLength = 0;
+  /// Indicates whether search is initiated or not.
+  bool _isSearchInitiated = false;
 
-  /// Define the focus node. To manage the lifecycle, create the FocusNode in
-  /// the initState method, and clean it up in the dispose method.
-  FocusNode _focusNode;
+  /// Indicates whether search toast need to be shown or not.
+  bool _showToast = false;
 
-  /// An object that is used to control the Text Form Field.
+  ///An object that is used to retrieve the current value of the TextField.
   final TextEditingController _editingController = TextEditingController();
 
   /// An object that is used to retrieve the text search result.
   PdfTextSearchResult _pdfTextSearchResult = PdfTextSearchResult();
+
+  ///An object that is used to obtain keyboard focus and to handle keyboard events.
+  FocusNode? _focusNode;
 
   @override
   void initState() {
@@ -201,16 +203,18 @@ class SearchToolbarState extends State<SearchToolbar> {
     _focusNode?.requestFocus();
   }
 
-  ///Clear the text search result
-  void clearSearch() {
-    _pdfTextSearchResult.clear();
-  }
-
   @override
   void dispose() {
     // Clean up the focus node when the Form is disposed.
     _focusNode?.dispose();
+    _pdfTextSearchResult.dispose();
     super.dispose();
+  }
+
+  ///Clear the text search result
+  void clearSearch() {
+    _isSearchInitiated = false;
+    _pdfTextSearchResult.clear();
   }
 
   ///Display the Alert dialog to search from the beginning
@@ -226,20 +230,26 @@ class SearchToolbarState extends State<SearchToolbar> {
               child: Text(
                   'No more occurrences found. Would you like to continue to search from the beginning?')),
           actions: <Widget>[
-            FlatButton(
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _pdfTextSearchResult.nextInstance();
+                });
+                Navigator.of(context).pop();
+              },
               child: Text('YES'),
-              onPressed: () {
-                _pdfTextSearchResult?.nextInstance();
-                Navigator.of(context).pop();
-              },
             ),
-            FlatButton(
-              child: Text('NO'),
+            TextButton(
               onPressed: () {
-                _pdfTextSearchResult?.clear();
-                _editingController.clear();
+                setState(() {
+                  _pdfTextSearchResult.clear();
+                  _editingController.clear();
+                  _isSearchInitiated = false;
+                  _focusNode?.requestFocus();
+                });
                 Navigator.of(context).pop();
               },
+              child: Text('NO'),
             ),
           ],
         );
@@ -250,8 +260,6 @@ class SearchToolbarState extends State<SearchToolbar> {
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      // mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
         Material(
           color: Colors.transparent,
@@ -263,8 +271,9 @@ class SearchToolbarState extends State<SearchToolbar> {
             ),
             onPressed: () {
               widget.onTap?.call('Cancel Search');
+              _isSearchInitiated = false;
               _editingController.clear();
-              _pdfTextSearchResult?.clear();
+              _pdfTextSearchResult.clear();
             },
           ),
         ),
@@ -283,23 +292,30 @@ class SearchToolbarState extends State<SearchToolbar> {
               hintStyle: TextStyle(color: Color(0x000000).withOpacity(0.34)),
             ),
             onChanged: (text) {
-              if (_textLength < _editingController.value.text.length) {
-                _textLength = _editingController.value.text.length;
-              }
-              if (_editingController.value.text.length < _textLength) {
-                setState(() {
-                  _showSearchResultItems = false;
-                });
+              if (_editingController.text.isNotEmpty) {
+                setState(() {});
               }
             },
-            onFieldSubmitted: (String value) async {
-              _pdfTextSearchResult =
-                  await widget.controller.searchText(_editingController.text);
-              if (_pdfTextSearchResult.totalInstanceCount == 0) {
-                widget.onTap?.call('onSubmit');
+            onFieldSubmitted: (String value) {
+              if (kIsWeb) {
+                _pdfTextSearchResult =
+                    widget.controller!.searchText(_editingController.text);
+                if (_pdfTextSearchResult.totalInstanceCount == 0) {
+                  widget.onTap?.call('noResultFound');
+                }
+                setState(() {});
               } else {
-                setState(() {
-                  _showSearchResultItems = true;
+                _isSearchInitiated = true;
+                _pdfTextSearchResult =
+                    widget.controller!.searchText(_editingController.text);
+                _pdfTextSearchResult.addListener(() {
+                  if (super.mounted) {
+                    setState(() {});
+                  }
+                  if (!_pdfTextSearchResult.hasResult &&
+                      _pdfTextSearchResult.isSearchCompleted) {
+                    widget.onTap?.call('noResultFound');
+                  }
                 });
               }
             },
@@ -318,10 +334,10 @@ class SearchToolbarState extends State<SearchToolbar> {
               onPressed: () {
                 setState(() {
                   _editingController.clear();
-                  _pdfTextSearchResult?.clear();
-                  widget.controller.clearSelection();
-                  _showSearchResultItems = false;
-                  _focusNode.requestFocus();
+                  _pdfTextSearchResult.clear();
+                  widget.controller?.clearSelection();
+                  _isSearchInitiated = false;
+                  _focusNode?.requestFocus();
                 });
                 widget.onTap?.call('Clear Text');
               },
@@ -330,11 +346,25 @@ class SearchToolbarState extends State<SearchToolbar> {
           ),
         ),
         Visibility(
-          visible: _showSearchResultItems,
+          visible:
+              !_pdfTextSearchResult.isSearchCompleted && _isSearchInitiated,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                color: Theme.of(context).primaryColor,
+              ),
+            ),
+          ),
+        ),
+        Visibility(
+          visible: _pdfTextSearchResult.hasResult,
           child: Row(
             children: [
               Text(
-                '${_pdfTextSearchResult?.currentInstanceIndex}',
+                '${_pdfTextSearchResult.currentInstanceIndex}',
                 style: TextStyle(
                     color: Color.fromRGBO(0, 0, 0, 0.54).withOpacity(0.87),
                     fontSize: 16),
@@ -346,7 +376,7 @@ class SearchToolbarState extends State<SearchToolbar> {
                     fontSize: 16),
               ),
               Text(
-                '${_pdfTextSearchResult?.totalInstanceCount}',
+                '${_pdfTextSearchResult.totalInstanceCount}',
                 style: TextStyle(
                     color: Color.fromRGBO(0, 0, 0, 0.54).withOpacity(0.87),
                     fontSize: 16),
@@ -361,7 +391,7 @@ class SearchToolbarState extends State<SearchToolbar> {
                   ),
                   onPressed: () {
                     setState(() {
-                      _pdfTextSearchResult?.previousInstance();
+                      _pdfTextSearchResult.previousInstance();
                     });
                     widget.onTap?.call('Previous Instance');
                   },
@@ -378,14 +408,15 @@ class SearchToolbarState extends State<SearchToolbar> {
                   ),
                   onPressed: () {
                     setState(() {
-                      if (_pdfTextSearchResult?.currentInstanceIndex ==
-                              _pdfTextSearchResult?.totalInstanceCount &&
-                          _pdfTextSearchResult?.currentInstanceIndex != 0 &&
-                          _pdfTextSearchResult?.totalInstanceCount != 0) {
+                      if (_pdfTextSearchResult.currentInstanceIndex ==
+                              _pdfTextSearchResult.totalInstanceCount &&
+                          _pdfTextSearchResult.currentInstanceIndex != 0 &&
+                          _pdfTextSearchResult.totalInstanceCount != 0 &&
+                          _pdfTextSearchResult.isSearchCompleted) {
                         _showSearchAlertDialog(context);
                       } else {
-                        widget.controller.clearSelection();
-                        _pdfTextSearchResult?.nextInstance();
+                        widget.controller?.clearSelection();
+                        _pdfTextSearchResult.nextInstance();
                       }
                     });
                     widget.onTap?.call('Next Instance');
